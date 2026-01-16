@@ -50,19 +50,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ onCreate, onOpen, onView, isM
       ) : (
         <div className="w-full max-w-4xl animate-in zoom-in-95 fade-in duration-300 px-2 pb-12 lg:pb-0">
           <div className="bg-slate-900/40 border border-slate-800 p-6 lg:p-12 rounded-[2.5rem] shadow-2xl backdrop-blur-md relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            {/* Elemento decorativo com pointer-events-none para não bloquear cliques */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none z-0"></div>
             
-            <div className="flex items-center justify-between mb-8 lg:mb-12">
+            <div className="flex items-center justify-between mb-8 lg:mb-12 relative z-10">
               <h2 className="text-xl lg:text-4xl font-black uppercase tracking-tight text-white">Configurar Projeto</h2>
               <button 
-                onClick={() => setShowSubMenu(false)}
-                className="text-slate-400 hover:text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-slate-800 rounded-xl transition-all border border-slate-800"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSubMenu(false);
+                }}
+                className="text-slate-400 hover:text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest px-5 py-2.5 hover:bg-slate-800 rounded-xl transition-all border border-slate-800 bg-slate-900/50 shadow-lg active:scale-95"
               >
                 Voltar
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-10 lg:mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-10 lg:mb-12 relative z-10">
               <ActionItem 
                 icon={<ImageIcon className="w-6 h-6 text-blue-400" />}
                 title="Novo Mapa"
@@ -77,7 +81,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onCreate, onOpen, onView, isM
               />
             </div>
 
-            <div className="p-6 lg:p-8 bg-slate-950/50 rounded-3xl border border-slate-800/50">
+            <div className="p-6 lg:p-8 bg-slate-950/50 rounded-3xl border border-slate-800/50 relative z-10">
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6">Recursos Disponíveis</h3>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8">
                 <Feature label="Padrão de Edição" icon={<Layout className="w-3 h-3"/>} />
