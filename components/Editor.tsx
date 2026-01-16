@@ -49,6 +49,16 @@ const Editor: React.FC<EditorProps> = ({
   const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
   const isReadOnly = mode === 'viewer';
 
+  // Helper para converter coordenadas da tela para o canvas (mundo)
+  const getCanvasCoords = (clientX: number, clientY: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: (clientX - rect.left - viewport.x) / viewport.zoom,
+      y: (clientY - rect.top - viewport.y) / viewport.zoom
+    };
+  };
+
   useEffect(() => {
     if (isReadOnly) setActiveTool('select');
   }, [isReadOnly]);
@@ -73,7 +83,7 @@ const Editor: React.FC<EditorProps> = ({
       const newY = mouseY - (mouseY - prev.y) * ratio;
       return { x: newX, y: newY, zoom: newZoom };
     });
-  }, []);
+  }, [viewport.x, viewport.y, viewport.zoom]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -84,10 +94,7 @@ const Editor: React.FC<EditorProps> = ({
   }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = (e.clientX - rect.left - viewport.x) / viewport.zoom;
-    const y = (e.clientY - rect.top - viewport.y) / viewport.zoom;
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
 
     if (activeTool === 'zone' && !isReadOnly) {
       setIsDrawing(true);
@@ -101,32 +108,59 @@ const Editor: React.FC<EditorProps> = ({
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const touch = e.touches[0];
+      const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
       lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+
+      if (!isReadOnly) {
+        // Tentar selecionar uma câmera para arrastar no touch
+        const hitCamera = cameras.find(cam => {
+          const dist = Math.sqrt(Math.pow(cam.x - x, 2) + Math.pow(cam.y - y, 2));
+          return dist < 40 / viewport.zoom; // Raio de colisão ajustado pelo zoom
+        });
+
+        if (hitCamera && !hitCamera.locked) {
+          setDraggedCameraId(hitCamera.id);
+          setSelectedCameraId(hitCamera.id);
+          return;
+        }
+
+        // Se ferramenta de zona estiver ativa
+        if (activeTool === 'zone') {
+          setIsDrawing(true);
+          setDrawStart({ x, y });
+          setDrawCurrent({ x, y });
+          return;
+        }
+      }
+
       setIsPanning(true);
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (isPanning && lastTouchRef.current && e.touches.length === 1) {
+    if (e.touches.length === 1) {
       const touch = e.touches[0];
-      const dx = touch.clientX - lastTouchRef.current.x;
-      const dy = touch.clientY - lastTouchRef.current.y;
-      setViewport(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
-      lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+      const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+
+      if (isDrawing) {
+        setDrawCurrent({ x, y });
+      } else if (draggedCameraId && !isReadOnly) {
+        onUpdateCameras(cameras.map(c => c.id === draggedCameraId && !c.locked ? { ...c, x, y } : c));
+      } else if (isPanning && lastTouchRef.current) {
+        const dx = touch.clientX - lastTouchRef.current.x;
+        const dy = touch.clientY - lastTouchRef.current.y;
+        setViewport(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
+        lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+      }
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
 
     if (isDrawing) {
-      const x = (e.clientX - rect.left - viewport.x) / viewport.zoom;
-      const y = (e.clientY - rect.top - viewport.y) / viewport.zoom;
       setDrawCurrent({ x, y });
     } else if (draggedCameraId && !isReadOnly) {
-      const x = (e.clientX - rect.left - viewport.x) / viewport.zoom;
-      const y = (e.clientY - rect.top - viewport.y) / viewport.zoom;
       onUpdateCameras(cameras.map(c => c.id === draggedCameraId && !c.locked ? { ...c, x, y } : c));
     } else if (isPanning) {
       setViewport(v => ({ ...v, x: v.x + e.movementX, y: v.y + e.movementY }));
@@ -161,9 +195,7 @@ const Editor: React.FC<EditorProps> = ({
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (isPanning || isDrawing || draggedCameraId) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left - viewport.x) / viewport.zoom;
-    const y = (e.clientY - rect.top - viewport.y) / viewport.zoom;
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
 
     if (activeTool === 'camera' && !isReadOnly) {
       const newCam: Camera = {
