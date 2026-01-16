@@ -1,8 +1,8 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import Editor from './components/Editor';
-import { AppMode, Camera, Zone, CameraStatus, DVR, ProjectData } from './types';
+import { AppMode, Camera, Zone, DVR, ProjectData } from './types';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('landing');
@@ -11,8 +11,17 @@ const App: React.FC = () => {
   const [zones, setZones] = useState<Zone[]>([]);
   const [dvr, setDvr] = useState<DVR | null>(null);
   const [mapImage, setMapImage] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleCreateProject = () => {
     fileInputRef.current?.click();
@@ -39,7 +48,7 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `projeto_seguranca_${Date.now()}.json`;
+    link.download = `raycam_projeto_${Date.now()}.json`;
     link.click();
   };
 
@@ -66,7 +75,7 @@ const App: React.FC = () => {
           setMapImage(data.mapImage || null);
           setMode(requestedMode);
         } catch (err) {
-          alert("Erro ao importar arquivo. Certifique-se de que é um JSON válido do SecurityCam Pro.");
+          alert("Erro ao importar arquivo. Certifique-se de que é um JSON válido do RayCam PRO.");
         }
       };
       reader.readAsText(file);
@@ -74,7 +83,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
+    <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col font-sans">
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -95,6 +104,7 @@ const App: React.FC = () => {
           onCreate={handleCreateProject}
           onOpen={handleImport}
           onView={handleOpenViewer}
+          isMobile={isMobile}
         />
       ) : (
         <Editor 
@@ -103,7 +113,10 @@ const App: React.FC = () => {
           zones={zones}
           dvr={dvr}
           mapImage={mapImage}
+          isMobile={isMobile}
           onBack={() => setMode('landing')}
+          onCreateNew={handleCreateProject}
+          onImportProject={handleImport}
           onUpdateCameras={setCameras}
           onUpdateZones={setZones}
           onUpdateDVR={setDvr}
