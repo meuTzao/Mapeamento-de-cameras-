@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Camera as CameraIcon, Home, Download, Plus, Layers, Eye, Maximize, Lock, Unlock, 
+  Camera as CameraIcon, Home, Download, Plus, Layers, Eye, EyeOff, Maximize, Lock, Unlock, 
   ZoomIn, ZoomOut, X, Trash2, CheckCircle, Server, Info, Pencil, AlertTriangle,
-  FilePlus, FolderOpen, Settings2
+  FilePlus, FolderOpen, Settings2, Ghost
 } from 'lucide-react';
 import { Camera, Zone, CameraStatus, DVR, AppMode } from '../types';
 import CameraFieldOfVision from './CameraFieldOfVision';
@@ -41,6 +41,10 @@ const Editor: React.FC<EditorProps> = ({
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, type: 'camera' | 'zone' } | null>(null);
   const [showMobileToolbox, setShowMobileToolbox] = useState(false);
+  
+  // Novos estados para visibilidade
+  const [showFov, setShowFov] = useState(true);
+  const [showZones, setShowZones] = useState(true);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
@@ -333,7 +337,7 @@ const Editor: React.FC<EditorProps> = ({
                 />
               )}
 
-              {zones.map(zone => (
+              {showZones && zones.map(zone => (
                 <div 
                   key={zone.id}
                   onClick={(e) => {
@@ -362,7 +366,7 @@ const Editor: React.FC<EditorProps> = ({
 
               {cameras.map(camera => (
                 <div key={camera.id} className="absolute z-30" style={{ left: camera.x, top: camera.y }}>
-                  <CameraFieldOfVision rotation={camera.rotation} fov={camera.fov} range={camera.range} status={camera.status} />
+                  {showFov && <CameraFieldOfVision rotation={camera.rotation} fov={camera.fov} range={camera.range} status={camera.status} />}
                   
                   <div className="relative">
                     <button 
@@ -537,11 +541,35 @@ const Editor: React.FC<EditorProps> = ({
 
       {/* FOOTER CONTROLS */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 lg:gap-4 bg-slate-900/90 backdrop-blur-2xl px-4 lg:px-6 py-2.5 lg:py-3 rounded-2xl border border-slate-800 shadow-2xl z-40">
-        <button onClick={() => setViewport(v => ({...v, zoom: Math.max(0.05, v.zoom - 0.2)}))} className="p-2 text-slate-400 hover:text-white"><ZoomOut className="w-5 h-5" /></button>
-        <span className="text-[10px] lg:text-[11px] font-black w-10 lg:w-14 text-center text-blue-400 tracking-widest">{Math.round(viewport.zoom * 100)}%</span>
-        <button onClick={() => setViewport(v => ({...v, zoom: Math.min(10, v.zoom + 0.2)}))} className="p-2 text-slate-400 hover:text-white"><ZoomIn className="w-5 h-5" /></button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setViewport(v => ({...v, zoom: Math.max(0.05, v.zoom - 0.2)}))} className="p-2 text-slate-400 hover:text-white transition-colors"><ZoomOut className="w-5 h-5" /></button>
+          <span className="text-[10px] lg:text-[11px] font-black w-10 lg:w-14 text-center text-blue-400 tracking-widest">{Math.round(viewport.zoom * 100)}%</span>
+          <button onClick={() => setViewport(v => ({...v, zoom: Math.min(10, v.zoom + 0.2)}))} className="p-2 text-slate-400 hover:text-white transition-colors"><ZoomIn className="w-5 h-5" /></button>
+        </div>
+        
         <div className="w-px h-6 bg-slate-800 mx-1" />
-        <button onClick={() => setViewport({ x: 0, y: 0, zoom: 0.6 })} className="px-3 py-2 text-slate-500 text-[9px] font-black uppercase tracking-widest hover:text-slate-200">Reset</button>
+        
+        {/* Novos controles de visibilidade */}
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setShowFov(!showFov)} 
+            title={showFov ? "Ocultar Campos de Visão" : "Mostrar Campos de Visão"}
+            className={`p-2 rounded-lg transition-all ${showFov ? 'text-blue-400 bg-blue-400/10' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            {showFov ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={() => setShowZones(!showZones)} 
+            title={showZones ? "Ocultar Setores" : "Mostrar Setores"}
+            className={`p-2 rounded-lg transition-all ${showZones ? 'text-emerald-400 bg-emerald-400/10' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            <Layers className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-slate-800 mx-1" />
+        
+        <button onClick={() => setViewport({ x: 0, y: 0, zoom: 0.6 })} className="px-3 py-2 text-slate-500 text-[9px] font-black uppercase tracking-widest hover:text-slate-200 transition-colors">Reset</button>
       </div>
 
       {/* MODAL DE EXCLUSÃO */}
