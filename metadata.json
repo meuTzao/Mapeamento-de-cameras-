@@ -1,0 +1,7 @@
+{
+  "name": "SecurityCam Manager Pro",
+  "description": "Plataforma avançada para planejamento e gestão de sistemas de monitoramento por vídeo, com plantas interativas e visualização de campo de visão.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
