@@ -1,9 +1,9 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Camera as CameraIcon, Home, Download, Plus, Layers, Eye, EyeOff, Maximize, Lock, Unlock, 
   ZoomIn, ZoomOut, X, Trash2, Server, Pencil, AlertTriangle,
-  FilePlus, FolderOpen, Settings2
+  FilePlus, FolderOpen, Settings2, Search, List, Filter, Target
 } from 'lucide-react';
 import { Camera, Zone, CameraStatus, DVR, AppMode } from '../types';
 import CameraFieldOfVision from './CameraFieldOfVision';
@@ -41,6 +41,9 @@ const Editor: React.FC<EditorProps> = ({
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, type: 'camera' | 'zone' } | null>(null);
   const [showMobileToolbox, setShowMobileToolbox] = useState(false);
+  const [showInventory, setShowInventory] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<CameraStatus | 'ALL'>('ALL');
   
   const [showFov, setShowFov] = useState(true);
   const [showZones, setShowZones] = useState(true);
@@ -49,7 +52,40 @@ const Editor: React.FC<EditorProps> = ({
   const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
   const isReadOnly = mode === 'viewer';
 
-  // Helper para converter coordenadas da tela para o canvas (mundo)
+  // Filtro de câmeras para o inventário
+  const filteredCameras = useMemo(() => {
+    return cameras.filter(cam => {
+      const matchesSearch = cam.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'ALL' || cam.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [cameras, searchQuery, statusFilter]);
+
+  // Função para focar o mapa em uma câmera específica
+  const focusOnCamera = (camera: Camera) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const targetZoom = 1.2; // Zoom de foco
+    
+    // Calcula a posição para centralizar a câmera
+    const newX = (rect.width / 2) - (camera.x * targetZoom);
+    const newY = (rect.height / 2) - (camera.y * targetZoom);
+
+    setViewport({ x: newX, y: newY, zoom: targetZoom });
+    setSelectedCameraId(camera.id);
+    setSelectedZoneId(null);
+    
+    if (isReadOnly) {
+      setShowTooltip(camera.id);
+    }
+    
+    if (isMobile) {
+      setShowInventory(false);
+    }
+  };
+
   const getCanvasCoords = (clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -83,7 +119,7 @@ const Editor: React.FC<EditorProps> = ({
       const newY = mouseY - (mouseY - prev.y) * ratio;
       return { x: newX, y: newY, zoom: newZoom };
     });
-  }, [viewport.x, viewport.y, viewport.zoom]);
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -95,7 +131,6 @@ const Editor: React.FC<EditorProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-
     if (activeTool === 'zone' && !isReadOnly) {
       setIsDrawing(true);
       setDrawStart({ x, y });
@@ -112,10 +147,9 @@ const Editor: React.FC<EditorProps> = ({
       lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
 
       if (!isReadOnly) {
-        // Tentar selecionar uma câmera para arrastar no touch
         const hitCamera = cameras.find(cam => {
           const dist = Math.sqrt(Math.pow(cam.x - x, 2) + Math.pow(cam.y - y, 2));
-          return dist < 40 / viewport.zoom; // Raio de colisão ajustado pelo zoom
+          return dist < 40 / viewport.zoom;
         });
 
         if (hitCamera && !hitCamera.locked) {
@@ -124,7 +158,6 @@ const Editor: React.FC<EditorProps> = ({
           return;
         }
 
-        // Se ferramenta de zona estiver ativa
         if (activeTool === 'zone') {
           setIsDrawing(true);
           setDrawStart({ x, y });
@@ -132,7 +165,6 @@ const Editor: React.FC<EditorProps> = ({
           return;
         }
       }
-
       setIsPanning(true);
     }
   };
@@ -141,7 +173,6 @@ const Editor: React.FC<EditorProps> = ({
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
-
       if (isDrawing) {
         setDrawCurrent({ x, y });
       } else if (draggedCameraId && !isReadOnly) {
@@ -157,7 +188,6 @@ const Editor: React.FC<EditorProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-
     if (isDrawing) {
       setDrawCurrent({ x, y });
     } else if (draggedCameraId && !isReadOnly) {
@@ -266,13 +296,19 @@ const Editor: React.FC<EditorProps> = ({
           </div>
 
           <div className="flex items-center gap-2 lg:gap-3 border-l border-slate-800 pl-3 lg:pl-4">
-            <CameraIcon className="w-4 h-4 lg:w-5 lg:h-5 text-blue-500" />
-            <div className="hidden sm:block">
-              <h1 className="text-xs lg:text-sm font-black truncate max-w-[100px] lg:max-w-none uppercase tracking-tighter">RayCam PRO</h1>
-              <p className="text-[8px] lg:text-[10px] text-slate-500 uppercase tracking-tighter font-bold">
-                {isReadOnly ? 'VISUALIZAÇÃO' : 'EDITOR'}
-              </p>
+            <div className="flex items-center gap-2">
+              <CameraIcon className="w-4 h-4 lg:w-5 lg:h-5 text-blue-500" />
+              <div className="hidden sm:block">
+                <h1 className="text-xs lg:text-sm font-black truncate max-w-[100px] lg:max-w-none uppercase tracking-tighter">RayCam PRO</h1>
+              </div>
             </div>
+            <button 
+              onClick={() => setShowInventory(!showInventory)}
+              className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all ${showInventory ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}
+            >
+              <List className="w-4 h-4" />
+              <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">Inventário</span>
+            </button>
           </div>
         </div>
 
@@ -330,6 +366,73 @@ const Editor: React.FC<EditorProps> = ({
           <button onClick={() => setViewport({ x: 0, y: 0, zoom: 0.6 })} className="px-3 py-2 text-slate-500 text-[9px] font-black uppercase tracking-widest hover:text-slate-200 transition-colors">Reset</button>
         </div>
 
+        {/* SIDEBAR DE INVENTÁRIO (ESQUERDA) */}
+        {showInventory && (
+          <aside className={`
+            fixed lg:absolute left-0 top-0 lg:top-0 h-full w-full lg:w-80 
+            bg-slate-900/95 lg:bg-slate-900 backdrop-blur-3xl border-r border-slate-800 
+            flex flex-col z-[100] animate-in slide-in-from-left shadow-2xl
+          `}>
+            <div className="p-6 border-b border-slate-800 shrink-0">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                  <List className="w-4 h-4 text-blue-500" /> Inventário de Dispositivos
+                </h3>
+                <button onClick={() => setShowInventory(false)} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="relative mb-4">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input 
+                  type="text"
+                  placeholder="Buscar pelo nome..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-3 text-xs outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <FilterBtn active={statusFilter === 'ALL'} label="Todos" onClick={() => setStatusFilter('ALL')} />
+                <FilterBtn active={statusFilter === CameraStatus.PROBLEMA} color="rose" label="Alertas" onClick={() => setStatusFilter(CameraStatus.PROBLEMA)} />
+                <FilterBtn active={statusFilter === CameraStatus.MANUTENCAO} color="amber" label="Ajuste" onClick={() => setStatusFilter(CameraStatus.MANUTENCAO)} />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+              {filteredCameras.length > 0 ? (
+                filteredCameras.map(cam => (
+                  <button 
+                    key={cam.id}
+                    onClick={() => focusOnCamera(cam)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group ${selectedCameraId === cam.id ? 'bg-blue-600/10 border-blue-500/30' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cam.status === CameraStatus.NORMAL ? 'bg-emerald-500/10 text-emerald-500' : cam.status === CameraStatus.MANUTENCAO ? 'bg-amber-500/10 text-amber-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                      <CameraIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`text-xs font-black truncate uppercase tracking-tight ${selectedCameraId === cam.id ? 'text-blue-400' : 'text-slate-200'}`}>{cam.name}</h4>
+                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{cam.status}</p>
+                    </div>
+                    <Target className={`w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity ${selectedCameraId === cam.id ? 'text-blue-400' : 'text-slate-600'}`} />
+                  </button>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-slate-600">
+                   <Search className="w-12 h-12 mb-4 opacity-10" />
+                   <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">Nenhuma câmera encontrada para os filtros aplicados</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-slate-950/50 border-t border-slate-800 shrink-0">
+               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Total: {filteredCameras.length} Dispositivos</p>
+            </div>
+          </aside>
+        )}
+
         {/* TOOLBOX (DESKTOP) */}
         {!isReadOnly && !isMobile && (
           <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-1.5 bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl z-40">
@@ -363,7 +466,7 @@ const Editor: React.FC<EditorProps> = ({
 
         <div 
           ref={containerRef}
-          className={`w-full h-full overflow-hidden relative touch-none ${isPanning ? 'cursor-grabbing' : isDrawing ? 'cursor-crosshair' : 'cursor-default'}`}
+          className={`w-full h-full overflow-hidden relative touch-none transition-[transform] duration-500 ease-out ${isPanning ? 'cursor-grabbing' : isDrawing ? 'cursor-crosshair' : 'cursor-default'}`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -374,7 +477,7 @@ const Editor: React.FC<EditorProps> = ({
           onClick={handleCanvasClick}
         >
           <div 
-            className="absolute transition-transform duration-75 origin-top-left"
+            className="absolute transition-transform duration-500 ease-out origin-top-left"
             style={{ 
               transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             }}
@@ -414,7 +517,7 @@ const Editor: React.FC<EditorProps> = ({
                     backgroundColor: zone.color
                   }}
                 >
-                  <span className="text-[10px] lg:text-[12px] font-black text-white bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm shadow-lg border border-white/10 uppercase tracking-tighter">{zone.name}</span>
+                  <span className="text-[10px] lg:text-[12px] font-black text-white bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm shadow-lg border border-white/10 uppercase tracking-tighter text-center">{zone.name}</span>
                 </div>
               ))}
 
@@ -456,7 +559,7 @@ const Editor: React.FC<EditorProps> = ({
                         ${camera.status === CameraStatus.NORMAL ? 'bg-emerald-500' : ''}
                         ${camera.status === CameraStatus.MANUTENCAO ? 'bg-amber-500' : ''}
                         ${camera.status === CameraStatus.PROBLEMA ? 'bg-rose-500' : ''}
-                        ${selectedCameraId === camera.id && !isReadOnly ? 'scale-125 ring-4 ring-blue-500 ring-offset-2 ring-offset-slate-900' : 'hover:scale-110'}
+                        ${selectedCameraId === camera.id ? 'scale-125 ring-4 ring-blue-500 ring-offset-2 ring-offset-slate-900' : 'hover:scale-110'}
                         ${camera.locked || isReadOnly ? 'cursor-default' : 'cursor-move'}
                       `}
                     >
@@ -622,6 +725,19 @@ const Editor: React.FC<EditorProps> = ({
     </div>
   );
 };
+
+const FilterBtn: React.FC<{ active: boolean; label: string; onClick: () => void; color?: 'rose' | 'amber' }> = ({ active, label, onClick, color }) => (
+  <button 
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+      active 
+        ? color === 'rose' ? 'bg-rose-600 border-rose-500 text-white' : color === 'amber' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-blue-600 border-blue-500 text-white'
+        : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+    }`}
+  >
+    {label}
+  </button>
+);
 
 const ToolBtn: React.FC<{ active: boolean; icon: React.ReactNode; label: string; onClick: () => void }> = ({ active, icon, label, onClick }) => (
   <button 
